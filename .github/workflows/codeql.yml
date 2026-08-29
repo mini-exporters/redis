@@ -9,12 +9,12 @@ on:
   pull_request:
     branches: [ "main" ]
   schedule:
-    - cron: '30 15 * * 4'
+    - cron: "30 15 * * 4"
 
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
-    runs-on: 'ubuntu-latest'
+    runs-on: "ubuntu-latest"
     permissions:
       security-events: write
       packages: read
@@ -43,9 +43,9 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v7
         with:
-          go-version-file: 'go.mod'
+          go-version-file: "go.mod"
           cache: true
-          cache-dependency-path: 'go.sum'
+          cache-dependency-path: "go.sum"
 
       - name: Build the Go Application
         run: go build ./cmd/redis_exporter
