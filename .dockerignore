@@ -25,8 +25,18 @@ go.work
 go.work.sum
 
 # env file
-.env
+.env*
 
 # Editor/IDE
 .idea/
 .vscode/
+
+*_test.go
+
+.github
+.gitignore
+example/
+Dockerfile
+LICENSE
+README.md
+.dockerignore
