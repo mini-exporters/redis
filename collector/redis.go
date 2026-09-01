@@ -2,6 +2,7 @@ package collector
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"time"
 
@@ -34,15 +35,15 @@ func NewRedisCollector(client *goredis.Client) *RedisCollector {
 	clientsMetrics := []metric{
 		&gaugeMetric{
 			key: "connected_clients",
-			d:   prometheus.NewDesc("redis_clients_connected_clients", "Number of active clients (connected_clients).", nil, nil),
+			d:   prometheus.NewDesc("redis_clients_connected", "Number of active clients (connected_clients).", nil, nil),
 		},
 		&gaugeMetric{
 			key: "blocked_clients",
-			d:   prometheus.NewDesc("redis_clients_blocked_clients", "Number of awaiting clients (blocked_clients).", nil, nil),
+			d:   prometheus.NewDesc("redis_clients_blocked", "Number of awaiting clients (blocked_clients).", nil, nil),
 		},
 		&gaugeMetric{
 			key: "maxclients",
-			d:   prometheus.NewDesc("redis_clients_max_clients", "Maximum number of available clients (maxclients).", nil, nil),
+			d:   prometheus.NewDesc("redis_clients_max", "Maximum number of available clients (maxclients).", nil, nil),
 		},
 		&gaugeMetric{
 			key: "total_blocking_keys",
@@ -50,7 +51,45 @@ func NewRedisCollector(client *goredis.Client) *RedisCollector {
 		},
 	}
 
-	metrics := append(serverMetrics, clientsMetrics...)
+	// Memory metrics are derived from the Memory section of Redis INFO
+	memoryMetrics := []metric{
+		&gaugeMetric{
+			key: "used_memory",
+			d:   prometheus.NewDesc("redis_memory_used_bytes", "Memory used in bytes (used_memory).", nil, nil),
+		},
+		&gaugeMetric{
+			key: "maxmemory",
+			d:   prometheus.NewDesc("redis_memory_max_bytes", "Maximum memory in bytes (maxmemory).", nil, nil),
+		},
+		&gaugeMetric{
+			key: "mem_fragmentation_ratio",
+			d:   prometheus.NewDesc("redis_memory_fragmentation_ratio", "Memory Fragmentation ratio (mem_fragmentation_ratio).", nil, nil),
+		},
+		&gaugeMetric{
+			key: "used_memory_rss",
+			d:   prometheus.NewDesc("redis_memory_used_rss_bytes", "Memory used reported by the OS in bytes (used_memory_rss).", nil, nil),
+		},
+		&gaugeMetric{
+			key: "used_memory_peak",
+			d:   prometheus.NewDesc("redis_memory_used_peak_bytes", "Memory peak in bytes (used_memory_peak).", nil, nil),
+		},
+		// Deprecated in Redis 7.0
+		&gaugeMetric{
+			key: "used_memory_lua",
+			d:   prometheus.NewDesc("redis_memory_used_lua_bytes", "Memory used by the LUA engine in bytes (used_memory_lua).", nil, nil),
+		},
+		// Replaced used_memory_lua
+		&gaugeMetric{
+			key: "used_memory_vm_eval",
+			d:   prometheus.NewDesc("redis_memory_used_vm_bytes", "Memory used by the VM engines in bytes (used_memory_vm_eval).", nil, nil),
+		},
+	}
+
+	metrics := slices.Concat(
+		serverMetrics,
+		clientsMetrics,
+		memoryMetrics,
+	)
 	return &RedisCollector{
 		client:  client,
 		up:      prometheus.NewDesc("redis_up", "Whether or not Redis is up.", nil, nil),
