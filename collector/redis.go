@@ -24,64 +24,108 @@ type RedisCollector struct {
 // NewRedisCollector initializes a new redis metric collector.
 func NewRedisCollector(client *goredis.Client) *RedisCollector {
 	// Server metrics are derived from the Server section of Redis INFO
+	prefix := "redis_server_"
 	serverMetrics := []metric{
 		&gaugeMetric{
 			key: "uptime_in_seconds",
-			d:   prometheus.NewDesc("redis_server_uptime_seconds", "Redis uptime in seconds (uptime_in_seconds).", nil, nil),
+			d:   prometheus.NewDesc(prefix+"uptime_seconds", "Redis uptime in seconds (uptime_in_seconds).", nil, nil),
 		},
 	}
 
 	// Clients metrics are derived from the Clients section of Redis INFO
+	prefix = "redis_clients_"
 	clientsMetrics := []metric{
 		&gaugeMetric{
 			key: "connected_clients",
-			d:   prometheus.NewDesc("redis_clients_connected", "Number of active clients (connected_clients).", nil, nil),
+			d:   prometheus.NewDesc(prefix+"connected", "Number of active clients (connected_clients).", nil, nil),
 		},
 		&gaugeMetric{
 			key: "blocked_clients",
-			d:   prometheus.NewDesc("redis_clients_blocked", "Number of awaiting clients (blocked_clients).", nil, nil),
+			d:   prometheus.NewDesc(prefix+"blocked", "Number of awaiting clients (blocked_clients).", nil, nil),
 		},
 		&gaugeMetric{
 			key: "maxclients",
-			d:   prometheus.NewDesc("redis_clients_max", "Maximum number of available clients (maxclients).", nil, nil),
+			d:   prometheus.NewDesc(prefix+"max", "Maximum number of available clients (maxclients).", nil, nil),
 		},
 		&gaugeMetric{
 			key: "total_blocking_keys",
-			d:   prometheus.NewDesc("redis_clients_total_blocking_keys", "Number of blocking keys (total_blocking_keys).", nil, nil),
+			d:   prometheus.NewDesc(prefix+"total_blocking_keys", "Number of blocking keys (total_blocking_keys).", nil, nil),
 		},
 	}
 
 	// Memory metrics are derived from the Memory section of Redis INFO
+	prefix = "redis_memory_"
 	memoryMetrics := []metric{
 		&gaugeMetric{
 			key: "used_memory",
-			d:   prometheus.NewDesc("redis_memory_used_bytes", "Memory used in bytes (used_memory).", nil, nil),
+			d:   prometheus.NewDesc(prefix+"used_bytes", "Memory used in bytes (used_memory).", nil, nil),
 		},
 		&gaugeMetric{
 			key: "maxmemory",
-			d:   prometheus.NewDesc("redis_memory_max_bytes", "Maximum memory in bytes (maxmemory).", nil, nil),
+			d:   prometheus.NewDesc(prefix+"max_bytes", "Maximum memory in bytes (maxmemory).", nil, nil),
 		},
 		&gaugeMetric{
 			key: "mem_fragmentation_ratio",
-			d:   prometheus.NewDesc("redis_memory_fragmentation_ratio", "Memory Fragmentation ratio (mem_fragmentation_ratio).", nil, nil),
+			d:   prometheus.NewDesc(prefix+"fragmentation_ratio", "Memory Fragmentation ratio (mem_fragmentation_ratio).", nil, nil),
 		},
 		&gaugeMetric{
 			key: "used_memory_rss",
-			d:   prometheus.NewDesc("redis_memory_used_rss_bytes", "Memory used reported by the OS in bytes (used_memory_rss).", nil, nil),
+			d:   prometheus.NewDesc(prefix+"used_rss_bytes", "Memory used reported by the OS in bytes (used_memory_rss).", nil, nil),
 		},
 		&gaugeMetric{
 			key: "used_memory_peak",
-			d:   prometheus.NewDesc("redis_memory_used_peak_bytes", "Memory peak in bytes (used_memory_peak).", nil, nil),
+			d:   prometheus.NewDesc(prefix+"used_peak_bytes", "Memory peak in bytes (used_memory_peak).", nil, nil),
 		},
 		// Deprecated in Redis 7.0
 		&gaugeMetric{
 			key: "used_memory_lua",
-			d:   prometheus.NewDesc("redis_memory_used_lua_bytes", "Memory used by the LUA engine in bytes (used_memory_lua).", nil, nil),
+			d:   prometheus.NewDesc(prefix+"used_lua_bytes", "Memory used by the LUA engine in bytes (used_memory_lua).", nil, nil),
 		},
 		// Replaced used_memory_lua
 		&gaugeMetric{
 			key: "used_memory_vm_eval",
-			d:   prometheus.NewDesc("redis_memory_used_vm_bytes", "Memory used by the VM engines in bytes (used_memory_vm_eval).", nil, nil),
+			d:   prometheus.NewDesc(prefix+"used_vm_bytes", "Memory used by the VM engines in bytes (used_memory_vm_eval).", nil, nil),
+		},
+	}
+
+	// Persistence metrics are derived from the Persistence section of Redis INFO
+	prefix = "redis_persistence_"
+	persistenceMetrics := []metric{
+		&booleanGaugeMetric{
+			key: "rdb_last_bgsave_status",
+			d:   prometheus.NewDesc(prefix+"rdb_last_bgsave_status", "Last BGSAVE status (rdb_last_bgsave_status).", nil, nil),
+		},
+		&booleanGaugeMetric{
+			key: "aof_last_write_status",
+			d:   prometheus.NewDesc(prefix+"aof_last_write_status", "Last AOF write status (aof_last_write_status).", nil, nil),
+		},
+		&gaugeMetric{
+			key: "rdb_changes_since_last_save",
+			d:   prometheus.NewDesc(prefix+"rdb_changes_since_last_save", "Number of operations since the last RDB save (rdb_changes_since_last_save).", nil, nil),
+		},
+		&gaugeMetric{
+			key: "rdb_last_save_time",
+			d:   prometheus.NewDesc(prefix+"rdb_last_save_timestamp_seconds", "Timestamp of the last RDB save (rdb_last_save_time).", nil, nil),
+		},
+		&gaugeMetric{
+			key: "aof_enabled",
+			d:   prometheus.NewDesc(prefix+"aof_enabled", "Is AOF enabled (aof_enabled).", nil, nil),
+		},
+		&gaugeMetric{
+			key: "aof_current_size",
+			d:   prometheus.NewDesc(prefix+"aof_current_size_bytes", "AOF current file size in bytes (aof_current_size).", nil, nil),
+		},
+		&gaugeMetric{
+			key: "aof_base_size",
+			d:   prometheus.NewDesc(prefix+"aof_base_size_bytes", "AOF file size on latest startup or rewrite in bytes (aof_base_size).", nil, nil),
+		},
+		&counterMetric{
+			key: "rdb_saves",
+			d:   prometheus.NewDesc(prefix+"rdb_saves_total", "Total number of RDB snapshots performed since startup (rdb_saves).", nil, nil),
+		},
+		&counterMetric{
+			key: "aof_rewrites",
+			d:   prometheus.NewDesc(prefix+"aof_rewrites_total", "Total number of AOF rewrites performed since startup (aof_rewrites).", nil, nil),
 		},
 	}
 
@@ -89,6 +133,7 @@ func NewRedisCollector(client *goredis.Client) *RedisCollector {
 		serverMetrics,
 		clientsMetrics,
 		memoryMetrics,
+		persistenceMetrics,
 	)
 	return &RedisCollector{
 		client:  client,
