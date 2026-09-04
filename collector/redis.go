@@ -128,10 +128,55 @@ func NewRedisCollector(client *goredis.Client) *RedisCollector {
 		},
 	}
 
+	// Stats metrics are derived from the Stats and Errorstats sections of Redis INFO
 	prefix = "redis_stats_"
 	statsMetrics := []metric{
+		&counterMetric{
+			key: "keyspace_hits",
+			d:   prometheus.NewDesc(prefix+"keyspace_hits_total", "Total number of Keyspace hits (keyspace_hits).", nil, nil),
+		},
+		&counterMetric{
+			key: "keyspace_misses",
+			d:   prometheus.NewDesc(prefix+"keyspace_misses_total", "Total number of Keyspace misses (keyspace_misses).", nil, nil),
+		},
+		&counterMetric{
+			key: "expired_keys",
+			d:   prometheus.NewDesc(prefix+"expired_keys_total", "Total number of expired keys (expired_keys).", nil, nil),
+		},
+		&counterMetric{
+			key: "evicted_keys",
+			d:   prometheus.NewDesc(prefix+"evicted_keys_total", "Total number of evicted keys (evicted_keys).", nil, nil),
+		},
+		&counterMetric{
+			key: "total_connections_received",
+			d:   prometheus.NewDesc(prefix+"connections_received_total", "Total number of connections received (total_connections_received).", nil, nil),
+		},
+		&counterMetric{
+			key: "rejected_connections",
+			d:   prometheus.NewDesc(prefix+"rejected_connections_total", "Total number of rejected connections (rejected_connections).", nil, nil),
+		},
+		&counterMetric{
+			key: "total_error_replies",
+			d:   prometheus.NewDesc(prefix+"error_replies_total", "Total number of error replies (total_error_replies).", nil, nil),
+		},
+		&counterMetric{
+			key: "total_commands_processed",
+			d:   prometheus.NewDesc(prefix+"commands_processed_total", "Total number of commands processed (total_commands_processed).", nil, nil),
+		},
+		&gaugeMetric{
+			key: "instantaneous_ops_per_sec",
+			d:   prometheus.NewDesc(prefix+"instantaneous_ops_per_sec", "Number of commands processed per second (instantaneous_ops_per_sec).", nil, nil),
+		},
+		&counterMetric{
+			key: "total_net_input_bytes",
+			d:   prometheus.NewDesc(prefix+"net_input_bytes_total", "Total number of bytes read from the network (total_net_input_bytes).", nil, nil),
+		},
+		&counterMetric{
+			key: "total_net_output_bytes",
+			d:   prometheus.NewDesc(prefix+"net_output_bytes_total", "Total number of bytes written to the network (total_net_output_bytes).", nil, nil),
+		},
 		&errorstatMetric{
-			d: prometheus.NewDesc(prefix+"errors_total", "Total number of errors.", []string{"code"}, nil),
+			d: prometheus.NewDesc(prefix+"errors_total", "Total number of errors (errorstat_<CODE>).", []string{"code"}, nil),
 		},
 	}
 
