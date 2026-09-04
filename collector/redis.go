@@ -128,11 +128,23 @@ func NewRedisCollector(client *goredis.Client) *RedisCollector {
 		},
 	}
 
+	// Keyspace metrics are derived from the Keyspace section of Redis INFO
+	prefix = "redis_db_"
+	keyspaceMetrics := []metric{
+		&keyspaceMetric{
+			keys:      prometheus.NewDesc(prefix+"keys", "Number of keys (db<N>:keys).", []string{"db"}, nil),
+			expires:   prometheus.NewDesc(prefix+"expires", "Number of keys with expiry (db<N>:expires).", []string{"db"}, nil),
+			avgTTL:    prometheus.NewDesc(prefix+"avg_ttl_seconds", "Average expiry TTL (db<N>:avg_ttl).", []string{"db"}, nil),
+			subexpiry: prometheus.NewDesc(prefix+"subexpiry", "Number of keys that have a sub-millisecond expiration (db<N>:subexpiry).", []string{"db"}, nil),
+		},
+	}
+
 	metrics := slices.Concat(
 		serverMetrics,
 		clientsMetrics,
 		memoryMetrics,
 		persistenceMetrics,
+		keyspaceMetrics,
 	)
 	return &RedisCollector{
 		client:  client,

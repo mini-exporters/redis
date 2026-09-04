@@ -86,3 +86,26 @@ func (m *booleanGaugeMetric) desc() []*prometheus.Desc {
 		m.d,
 	}
 }
+
+// keyspaceMetric implements metric for Redis INFO Keyspace.
+type keyspaceMetric struct {
+	keys      *prometheus.Desc
+	expires   *prometheus.Desc
+	avgTTL    *prometheus.Desc
+	subexpiry *prometheus.Desc
+}
+
+// collect implements metric.
+func (m *keyspaceMetric) collect(ch chan<- prometheus.Metric, fields *info) {
+	for _, k := range fields.keyspace {
+		ch <- prometheus.MustNewConstMetric(m.keys, prometheus.GaugeValue, k.keys, k.id)
+		ch <- prometheus.MustNewConstMetric(m.expires, prometheus.GaugeValue, k.expires, k.id)
+		ch <- prometheus.MustNewConstMetric(m.avgTTL, prometheus.GaugeValue, k.avgTTL/1000, k.id) // convert to seconds
+		ch <- prometheus.MustNewConstMetric(m.subexpiry, prometheus.GaugeValue, k.subexpiry, k.id)
+	}
+}
+
+// desc implements metric.
+func (m *keyspaceMetric) desc() []*prometheus.Desc {
+	return []*prometheus.Desc{m.keys, m.expires, m.avgTTL, m.subexpiry}
+}
