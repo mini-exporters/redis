@@ -3,7 +3,6 @@ package collector
 import (
 	"context"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -145,9 +144,10 @@ func NewRedisCollector(client *goredis.Client) *RedisCollector {
 // Describe implements prometheus.Collector.
 func (rc *RedisCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- rc.up
-
 	for _, m := range rc.metrics {
-		ch <- m.desc()
+		for _, d := range m.desc() {
+			ch <- d
+		}
 	}
 }
 
@@ -156,36 +156,15 @@ func (rc *RedisCollector) Collect(ch chan<- prometheus.Metric) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
-	info, err := rc.client.Info(ctx).Result()
+	result, err := rc.client.Info(ctx, "all").Result()
 	if err != nil {
 		ch <- prometheus.MustNewConstMetric(rc.up, prometheus.GaugeValue, 0)
 		return
 	}
 	ch <- prometheus.MustNewConstMetric(rc.up, prometheus.GaugeValue, 1)
 
-	fields := rc.parseInfo(info)
+	fields := parseInfo(result)
 	for _, m := range rc.metrics {
 		m.collect(ch, fields)
 	}
-}
-
-// parseInfo parses redis INFO output into a map.
-// Redis returns INFO as a series of key:value pairs separated by \r\n.
-// Comment/Section lines start with a # character.
-func (rc *RedisCollector) parseInfo(info string) map[string]string {
-	out := make(map[string]string)
-	for line := range strings.SplitSeq(info, "\r\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-
-		key, value, valid := strings.Cut(line, ":")
-		if !valid {
-			continue
-		}
-		out[key] = value
-	}
-
-	return out
 }
