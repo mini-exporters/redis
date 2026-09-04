@@ -1,0 +1,81 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# https://docs.coderabbit.ai/guides/configure-coderabbit
+language: "en-US"
+early_access: false
+
+chat:
+  auto_reply: true
+
+tone_instructions: >-
+  You are an expert Go reviewer with a background in observability and Prometheus
+  exporter development. Reply formal, concise: flag issues, give production-grade
+  fixes, no praise or diff restatement. Treat metric correctness as high-priority.
+
+reviews:
+  profile: chill
+  high_level_summary_instructions: >-
+    Write a concise summary for reviewers.
+        1. Start with a 1-2 sentence executive summary of the business or technical goal.
+        2. Group the technical changes into bulleted categories: Features, Fixes, Refactoring, and Chores.
+        3. Explicitly flag any of the following if present: new or renamed exported metrics (name/type/label changes are breaking for dashboards/alerts), changes to Redis connection/auth handling, or new env vars.
+        4. Do NOT list file-by-file changes (the walkthrough covers that). Keep it high-level.
+  high_level_summary_in_walkthrough: true
+
+  poem: false
+
+  collapse_walkthrough: true
+  sequence_diagrams: false
+  estimate_code_review_effort: false
+  related_prs: false
+  suggested_labels: false
+  suggested_reviewers: false
+  enable_prompt_for_ai_agents: false
+
+  path_instructions:
+    - path: "**/*.go"
+      instructions: |
+        Review this Go code for correctness, idiomatic style, and performance. Specifically:
+        - Flag unhandled or silently discarded errors (`_ = err`, ignored return values); prefer wrapping with `fmt.Errorf("...: %w", err)` over swallowing or re-stringifying
+        - Prefer sentinel errors / `errors.Is`/`errors.As` over string-matching error messages
+        - Check goroutines for leaks: every goroutine should have a clear exit path (context cancellation, closed channel, or WaitGroup); flag goroutines with no way to be stopped
+        - Prefer explicit, readable error handling and clean-code expressiveness over clever abstractions that obscure control flow
+        - Check exported functions/types have doc comments starting with the identifier name (godoc convention)
+        - Note allocations or patterns in hot paths that hurt performance (unnecessary copies, string concatenation in loops, missing `sync.Pool` where warranted) — this matters especially in `Collect()`, which runs on every scrape
+
+    - path: "collector/**/*.go"
+      instructions: |
+        Review this Prometheus collector code (`prometheus.Collector` implementation). Treat violations of these as high severity, not style nits:
+        - Check `Describe()` sends a `prometheus.Desc` for every metric `Collect()` can emit, so the collector is not "unchecked" and doesn't cause description/collection mismatches
+        - Flag metric name violations: metric names should be `snake_case`, prefixed with the exporter namespace (e.g. `redis_`), and end in a unit suffix where applicable (`_seconds`, `_bytes`, `_total` for counters)
+        - Flag wrong metric type choices: ever-increasing values must be `Counter` (via `MustNewConstMetric` with `CounterValue`, or `prometheus.NewDesc` + `CounterValue`), point-in-time values must be `Gauge`; flag use of `Counter` for a value that can decrease (e.g. connected clients) and vice versa
+        - Flag unbounded or high-cardinality labels — labels derived from unbounded input (raw keys, IPs, session/client IDs) can explode Prometheus's memory and cardinality; label values should come from a small, known set (e.g. `db`, `role`, `cmd` type)
+        - Check `Collect()` does not block indefinitely on the Redis connection — a scrape should have a bounded timeout (context with deadline) so a slow/hung Redis doesn't hang the `/metrics` endpoint
+        - Check `Collect()` is safe for concurrent scrapes (Prometheus can call it concurrently); flag shared mutable state (parser buffers, connection reuse) without a mutex or a fresh connection/client per scrape
+        - Check errors from the Redis client (parse failures, connection errors, `INFO` command failures) are surfaced as a `redis_exporter_last_scrape_error` / `up`-style gauge or via `ch <- prometheus.NewInvalidMetric(...)` rather than silently dropped or causing a panic
+        - Check parsing of Redis `INFO` output (or other server replies) is defensive against missing fields, unexpected types, or format changes across Redis versions — no unchecked type assertions or `strconv` calls without error handling
+        - Flag credentials (Redis password/AUTH, TLS client key) being logged, printed, or included in error messages or metric labels
+
+    - path: "cmd/**/*.go"
+      instructions: |
+        Review this exporter entrypoint / CLI command code. Specifically:
+        - Flag secrets (Redis password, TLS keys) accepted via command-line flags — these leak through shell history and process listings (`ps`); prefer an env var (e.g. `REDIS_PASSWORD`) or a file path flag instead
+        - Check the HTTP server (`/metrics`, `/healthz`) has read/write/idle timeouts set (no bare `http.ListenAndServe` with a zero-value `http.Server`) to avoid slowloris-style hangs
+        - Check `/metrics` is served via `promhttp.Handler()` (or `promhttp.HandlerFor` with a custom registry) rather than a hand-rolled handler
+        - Check listen address, Redis target address, and scrape/connection timeout are all configurable via flags with sane defaults, and that flag/env parsing errors are returned, not swallowed
+        - Check graceful shutdown: the HTTP server should stop accepting new connections and let in-flight scrapes finish on SIGINT/SIGTERM (`http.Server.Shutdown` with a context)
+
+  auto_review:
+    enabled: true
+    drafts: false
+    auto_incremental_review: false
+
+  tools:
+    languagetool:
+      enabled: true
+      level: default
+
+  finishing_touches:
+    docstrings:
+      enabled: false
+    unit_tests:
+      enabled: false
