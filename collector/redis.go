@@ -128,6 +128,13 @@ func NewRedisCollector(client *goredis.Client) *RedisCollector {
 		},
 	}
 
+	prefix = "redis_stats_"
+	statsMetrics := []metric{
+		&errorstatMetric{
+			d: prometheus.NewDesc(prefix+"errors_total", "Total number of errors.", []string{"code"}, nil),
+		},
+	}
+
 	// Keyspace metrics are derived from the Keyspace section of Redis INFO
 	prefix = "redis_db_"
 	keyspaceMetrics := []metric{
@@ -144,6 +151,7 @@ func NewRedisCollector(client *goredis.Client) *RedisCollector {
 		clientsMetrics,
 		memoryMetrics,
 		persistenceMetrics,
+		statsMetrics,
 		keyspaceMetrics,
 	)
 	return &RedisCollector{

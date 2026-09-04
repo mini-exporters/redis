@@ -109,3 +109,22 @@ func (m *keyspaceMetric) collect(ch chan<- prometheus.Metric, fields *info) {
 func (m *keyspaceMetric) desc() []*prometheus.Desc {
 	return []*prometheus.Desc{m.keys, m.expires, m.avgTTL, m.subexpiry}
 }
+
+// errorstatMetric implements metric for Redis INFO Errorstats.
+type errorstatMetric struct {
+	d *prometheus.Desc
+}
+
+// collect implements metric.
+func (m *errorstatMetric) collect(ch chan<- prometheus.Metric, fields *info) {
+	for _, e := range fields.errorstat {
+		ch <- prometheus.MustNewConstMetric(m.d, prometheus.CounterValue, e.value, e.code)
+	}
+}
+
+// desc implements metric.
+func (m *errorstatMetric) desc() []*prometheus.Desc {
+	return []*prometheus.Desc{
+		m.d,
+	}
+}
