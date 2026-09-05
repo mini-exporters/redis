@@ -201,6 +201,18 @@ func NewRedisCollector(client *goredis.Client) *RedisCollector {
 		},
 	}
 
+	prefix = "redis_cpu_"
+	cpuMetrics := []metric{
+		&counterMetric{
+			key: "used_cpu_sys",
+			d:   prometheus.NewDesc(prefix+"sys_seconds_total", "Total system CPU consumed by the Redis server in seconds (used_cpu_sys).", nil, nil),
+		},
+		&counterMetric{
+			key: "used_cpu_user",
+			d:   prometheus.NewDesc(prefix+"user_seconds_total", "Total user CPU consumed by the Redis server in seconds (used_cpu_user).", nil, nil),
+		},
+	}
+
 	// Keyspace metrics are derived from the Keyspace section of Redis INFO
 	prefix = "redis_db_"
 	keyspaceMetrics := []metric{
@@ -218,8 +230,9 @@ func NewRedisCollector(client *goredis.Client) *RedisCollector {
 		memoryMetrics,
 		persistenceMetrics,
 		statsMetrics,
-		keyspaceMetrics,
 		replicationMetrics,
+		cpuMetrics,
+		keyspaceMetrics,
 	)
 	return &RedisCollector{
 		client:  client,
