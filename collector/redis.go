@@ -180,6 +180,27 @@ func NewRedisCollector(client *goredis.Client) *RedisCollector {
 		},
 	}
 
+	// Replication metrics are derived from the Replication section of Redis INFO
+	prefix = "redis_replication_"
+	replicationMetrics := []metric{
+		&labelGaugeMetric{
+			key: "role",
+			d:   prometheus.NewDesc(prefix+"role", "Role of the instance (role).", []string{"role"}, nil),
+		},
+		&gaugeMetric{
+			key: "connected_slaves",
+			d:   prometheus.NewDesc(prefix+"connected_slaves", "Number of connected replicas (connected_slaves).", nil, nil),
+		},
+		&gaugeMetric{
+			key: "master_repl_offset",
+			d:   prometheus.NewDesc(prefix+"master_repl_offset", "Current replication offset (master_repl_offset).", nil, nil),
+		},
+		&gaugeMetric{
+			key: "repl_backlog_active",
+			d:   prometheus.NewDesc(prefix+"backlog_active", "Whether or not replication backlog is active (repl_backlog_active).", nil, nil),
+		},
+	}
+
 	// Keyspace metrics are derived from the Keyspace section of Redis INFO
 	prefix = "redis_db_"
 	keyspaceMetrics := []metric{
@@ -198,6 +219,7 @@ func NewRedisCollector(client *goredis.Client) *RedisCollector {
 		persistenceMetrics,
 		statsMetrics,
 		keyspaceMetrics,
+		replicationMetrics,
 	)
 	return &RedisCollector{
 		client:  client,

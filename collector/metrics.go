@@ -63,6 +63,26 @@ func (m *gaugeMetric) desc() []*prometheus.Desc {
 	}
 }
 
+// labelGaugeMetric implements metric for a prometheus.Gauge value that records values as labels.
+type labelGaugeMetric struct {
+	key string
+	d   *prometheus.Desc
+}
+
+// collect implements metric.
+func (m *labelGaugeMetric) collect(ch chan<- prometheus.Metric, fields *info) {
+	if value, ok := fields.normal[m.key]; ok {
+		ch <- prometheus.MustNewConstMetric(m.d, prometheus.GaugeValue, 1.0, value)
+	}
+}
+
+// desc implements metric.
+func (m *labelGaugeMetric) desc() []*prometheus.Desc {
+	return []*prometheus.Desc{
+		m.d,
+	}
+}
+
 // booleanGaugeMetric implements metric for a prometheus.Gauge value that records ok/err values as 1/0.
 type booleanGaugeMetric struct {
 	key string
