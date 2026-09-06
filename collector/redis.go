@@ -193,7 +193,7 @@ func NewRedisCollector(client *goredis.Client) *RedisCollector {
 		},
 		&gaugeMetric{
 			key: "master_repl_offset",
-			d:   prometheus.NewDesc(prefix+"master_repl_offset", "Current replication offset (master_repl_offset).", nil, nil),
+			d:   prometheus.NewDesc(prefix+"master_repl_offset_bytes", "Current replication offset (master_repl_offset).", nil, nil),
 		},
 		&gaugeMetric{
 			key: "repl_backlog_active",
