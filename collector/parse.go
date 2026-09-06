@@ -2,7 +2,6 @@ package collector
 
 import (
 	"regexp"
-	"strconv"
 	"strings"
 )
 
@@ -18,17 +17,17 @@ type info struct {
 // db0:keys=value1,expires=value2,avg_ttl=value3,subexpiry=value4.
 type keyspace struct {
 	id        string
-	keys      float64
-	expires   float64
-	avgTTL    float64
-	subexpiry float64
+	keys      *string
+	expires   *string
+	avgTTL    *string
+	subexpiry *string
 }
 
 // errorstat is a parsed Redis INFO Errorstat row:
-// errorstat_<CODE>
+// errorstat_<CODE>:count=value.
 type errorstat struct {
 	code  string
-	value float64
+	value string
 }
 
 // errorstatPrefix is a prefix for Errorstats metrics.
@@ -59,11 +58,15 @@ func parseInfo(raw string) *info {
 		}
 
 		if code, found := strings.CutPrefix(key, errorstatPrefix); found { // parse errorstat_<CODE>
-			_, f, ok := parseCSVField(value)
+			count, ok := strings.CutPrefix(value, "count=")
 			if !ok {
 				continue
 			}
-			result.errorstat = append(result.errorstat, errorstat{code, f})
+
+			result.errorstat = append(result.errorstat, errorstat{
+				code:  code,
+				value: count,
+			})
 		} else if matches := keyspaceRegexp.FindStringSubmatch(key); matches != nil { // parse db<N> keyspace
 			result.keyspace = append(result.keyspace, parseKeyspace(value, matches[1]))
 		} else { // parse normal field
@@ -74,47 +77,33 @@ func parseInfo(raw string) *info {
 	return result
 }
 
-// parseCSVField resolves a key and a float value from field=value. It's a best effort method.
-// Returns false during an error.
-func parseCSVField(raw string) (string, float64, bool) {
-	key, value, found := strings.Cut(raw, "=")
-	if !found {
-		return "", 0.0, false
-	}
-
-	f, err := strconv.ParseFloat(value, 64)
-	if err != nil {
-		return "", 0.0, false
-	}
-
-	return key, f, true
-}
-
-// parseKeyspace resolves float values from db0:keys=value1,expires=value2,avg_ttl=value3,subexpiry=value4 into a struct.
+// parseKeyspace resolves values from db0:keys=value1,expires=value2,avg_ttl=value3,subexpiry=value4 into a struct.
+// Any field absent from raw is left as nil.
 func parseKeyspace(raw string, n string) keyspace {
-	result := keyspace{}
+	result := keyspace{
+		id: n,
+	}
 	for group := range strings.SplitSeq(raw, ",") {
-		key, f, ok := parseCSVField(group)
+		key, value, ok := strings.Cut(group, "=")
 		if !ok {
 			continue
 		}
 
+		v := value
 		switch key {
 		case "keys":
-			result.keys = f
+			result.keys = &v
 
 		case "expires":
-			result.expires = f
+			result.expires = &v
 
 		case "avg_ttl":
-			result.avgTTL = f
+			result.avgTTL = &v
 
 		case "subexpiry":
-			result.subexpiry = f
+			result.subexpiry = &v
 		}
 	}
-
-	result.id = n
 
 	return result
 }

@@ -17,6 +17,10 @@ type RedisCollector struct {
 	// It is separated from other metrics, because it is derived based on Redis connectivity.
 	up *prometheus.Desc
 
+	// lastScrapeError is a gauge that represents whether the last successful
+	// scrape encountered any parsing error or no. It compliments up.
+	lastScrapeError *prometheus.Desc
+
 	metrics []metric
 }
 
@@ -235,15 +239,17 @@ func NewRedisCollector(client *goredis.Client) *RedisCollector {
 		keyspaceMetrics,
 	)
 	return &RedisCollector{
-		client:  client,
-		up:      prometheus.NewDesc("redis_up", "Whether or not Redis is up.", nil, nil),
-		metrics: metrics,
+		client:          client,
+		up:              prometheus.NewDesc("redis_up", "Whether or not Redis is up.", nil, nil),
+		lastScrapeError: prometheus.NewDesc("redis_last_scrape_error", "Whether the last scrape encountered any parse errors.", nil, nil),
+		metrics:         metrics,
 	}
 }
 
 // Describe implements prometheus.Collector.
 func (rc *RedisCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- rc.up
+	ch <- rc.lastScrapeError
 	for _, m := range rc.metrics {
 		for _, d := range m.desc() {
 			ch <- d
@@ -259,12 +265,24 @@ func (rc *RedisCollector) Collect(ch chan<- prometheus.Metric) {
 	result, err := rc.client.Info(ctx, "all").Result()
 	if err != nil {
 		ch <- prometheus.MustNewConstMetric(rc.up, prometheus.GaugeValue, 0)
+		ch <- prometheus.MustNewConstMetric(rc.lastScrapeError, prometheus.GaugeValue, 1)
 		return
 	}
 	ch <- prometheus.MustNewConstMetric(rc.up, prometheus.GaugeValue, 1)
 
 	fields := parseInfo(result)
+
+	var scrapeErrs []error
 	for _, m := range rc.metrics {
-		m.collect(ch, fields)
+		if err := m.collect(ch, fields); err != nil {
+			scrapeErrs = append(scrapeErrs, err)
+		}
+	}
+
+	if len(scrapeErrs) > 0 {
+		ch <- prometheus.MustNewConstMetric(rc.lastScrapeError, prometheus.GaugeValue, 1)
+		// TODO: Add structured logging (separate PR)
+	} else {
+		ch <- prometheus.MustNewConstMetric(rc.lastScrapeError, prometheus.GaugeValue, 0)
 	}
 }
