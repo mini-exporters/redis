@@ -185,7 +185,7 @@ func (m *keyspaceMetric) emitKeyspaceGauge(ch chan<- prometheus.Metric, d *prome
 	}
 
 	if math.IsInf(f, 0) || math.IsNaN(f) || f < 0 {
-		return fmt.Errorf("%s: invalid value: %s", label, *raw)
+		return fmt.Errorf("invalid value: %s", *raw)
 	}
 
 	if divisor != 0 {
