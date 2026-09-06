@@ -3,6 +3,7 @@ package collector
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -12,7 +13,7 @@ import (
 // from parsed INFO fields and emit it as a Prometheus metric.
 type metric interface {
 	// collect emits this metric's current value(s) onto ch, based on the parsed Redis INFO fields.
-	// A missing fieldi s not an error, absence is silently ignored.
+	// A missing field is not an error, absence is silently ignored.
 	// A present, but unparsable value is returned as an error, so
 	// it can be surfaced via redis_last_scrape_error.
 	collect(ch chan<- prometheus.Metric, fields *info) error
@@ -20,6 +21,28 @@ type metric interface {
 	// desc returns the Prometheus descriptor(s) for this metric.
 	// It should be used by the Collector to register the metric.
 	desc() []*prometheus.Desc
+}
+
+// emitMetric is a helper that retrieves the value from info, converts it to an appropriate format
+// and emits the metric into ch.
+// Returns an error on invalid float value.
+func emitMetric(ch chan<- prometheus.Metric, d *prometheus.Desc, fields *info, key string, metricType prometheus.ValueType) error {
+	value, ok := fields.normal[key]
+	if !ok {
+		return nil
+	}
+
+	f, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		return fmt.Errorf("%s: parsing %q: %w", key, value, err)
+	}
+
+	if math.IsInf(f, 0) || math.IsNaN(f) || f < 0 {
+		return fmt.Errorf("%s: invalid value: %s", key, value)
+	}
+
+	ch <- prometheus.MustNewConstMetric(d, metricType, f)
+	return nil
 }
 
 // counterMetric implements metric for a prometheus.Counter value.
@@ -30,18 +53,7 @@ type counterMetric struct {
 
 // collect implements metric.
 func (m *counterMetric) collect(ch chan<- prometheus.Metric, fields *info) error {
-	value, ok := fields.normal[m.key]
-	if !ok {
-		return nil
-	}
-
-	f, err := strconv.ParseFloat(value, 64)
-	if err != nil {
-		return fmt.Errorf("%s: parsing %q: %w", m.key, value, err)
-	}
-
-	ch <- prometheus.MustNewConstMetric(m.d, prometheus.CounterValue, f)
-	return nil
+	return emitMetric(ch, m.d, fields, m.key, prometheus.CounterValue)
 }
 
 // desc implements metric.
@@ -59,18 +71,7 @@ type gaugeMetric struct {
 
 // collect implements metric.
 func (m *gaugeMetric) collect(ch chan<- prometheus.Metric, fields *info) error {
-	value, ok := fields.normal[m.key]
-	if !ok {
-		return nil
-	}
-
-	f, err := strconv.ParseFloat(value, 64)
-	if err != nil {
-		return fmt.Errorf("%s: parsing %q: %w", m.key, value, err)
-	}
-
-	ch <- prometheus.MustNewConstMetric(m.d, prometheus.GaugeValue, f)
-	return nil
+	return emitMetric(ch, m.d, fields, m.key, prometheus.GaugeValue)
 }
 
 // desc implements metric.
@@ -117,10 +118,15 @@ func (m *booleanGaugeMetric) collect(ch chan<- prometheus.Metric, fields *info) 
 		return nil
 	}
 
-	if value == "ok" {
-		ch <- prometheus.MustNewConstMetric(m.d, prometheus.GaugeValue, 1)
-	} else {
-		ch <- prometheus.MustNewConstMetric(m.d, prometheus.GaugeValue, 0)
+	switch value {
+	case "ok":
+		ch <- prometheus.MustNewConstMetric(m.d, prometheus.GaugeValue, 1.0)
+
+	case "err":
+		ch <- prometheus.MustNewConstMetric(m.d, prometheus.GaugeValue, 0.0)
+
+	default:
+		return fmt.Errorf("%s: invalid value: %s", m.key, value)
 	}
 
 	return nil
@@ -178,6 +184,10 @@ func (m *keyspaceMetric) emitKeyspaceGauge(ch chan<- prometheus.Metric, d *prome
 		return fmt.Errorf("parsing %q: %w", *raw, err)
 	}
 
+	if math.IsInf(f, 0) || math.IsNaN(f) || f < 0 {
+		return fmt.Errorf("%s: invalid value: %s", label, *raw)
+	}
+
 	if divisor != 0 {
 		f /= divisor
 	}
@@ -210,6 +220,12 @@ func (m *errorstatMetric) collect(ch chan<- prometheus.Metric, fields *info) err
 			errs = append(errs, fmt.Errorf("errorstat_%s: parsing %q: %w", e.code, e.value, err))
 			continue
 		}
+
+		if math.IsInf(f, 0) || math.IsNaN(f) || f < 0 {
+			errs = append(errs, fmt.Errorf("errorstat_%s: invalid value: %q", e.code, e.value))
+			continue
+		}
+
 		ch <- prometheus.MustNewConstMetric(m.d, prometheus.CounterValue, f, e.code)
 	}
 
